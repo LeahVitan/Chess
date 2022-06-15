@@ -12,3 +12,7 @@ export const Players = {
   w: 16,
   b: 32
 }
+
+export const PieceMovement = {
+  p: 'mfWcefFimfnD'
+}

@@ -1,5 +1,5 @@
 
-import { fallback } from '../util/Util'
+import { fallback } from '../util/Util.js'
 
 /* class Board {
   constructor (size, pieces = Pieces, players = Players) {
