@@ -30,8 +30,7 @@ export const FEN = new (class {
 
     // Add pieces
     board.pieces = []
-    fields[Fields.Pieces].split('').forEach(chr => {
-      if (chr === '/') return
+    fields[Fields.Pieces].split('/').reverse().join('').split('').forEach(chr => {
       if (!isNaN(Number(chr))) {
         board.pieces.push(...Array(Number(chr)).fill(0))
       } else {
