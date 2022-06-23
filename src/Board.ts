@@ -58,10 +58,6 @@ enum Color {
   Black,
 }
 
-/**
- * All pieces. Where multiple pieces of a kind exist, they can be identified by
- *  their starting file.
- */
 enum Piece {
   Rook,
   Knight,
@@ -75,6 +71,7 @@ export class ChessBoard {
   public move: number = 1
   public halfMoveClock: number = 0
   public enPassant: number = NaN
+  public canCastle: number = 8
 
   /**
    * One bitboard per colour, and one bitboard per piece.
