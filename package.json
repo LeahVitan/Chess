@@ -19,7 +19,17 @@
   "homepage": "https://github.com/LeahVitan/Chess#readme",
   "eslintConfig": {
     "env": {
-        "node": true
+      "node": true
     }
+  },
+  "ts-standard": {
+    "project": "./tsconfig.json"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.29.0",
+    "@typescript-eslint/parser": "^5.29.0",
+    "eslint": "^8.18.0",
+    "ts-standard": "^11.0.0",
+    "typescript": "^4.7.4"
   }
 }
