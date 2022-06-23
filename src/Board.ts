@@ -55,12 +55,13 @@ export const Directions = {
 
 enum Color { White, Black }
 enum Piece { Rook, Knight, Bishop, Queen, King, Pawn }
+enum Castle { KQkq, KQk, KQq, KQ, Kkq, Kk, Kq, K, Qkq, Qk, Qq, Q, kq, k, q, ''}
 
 export class ChessBoard {
   public move: number = 1
   public halfMoveClock: number = 0
   public enPassant: number = NaN
-  public canCastle: number = 8
+  public canCastle: Castle = Castle.KQkq
 
   /**
    * One bitboard per colour, and one bitboard per piece.
@@ -71,6 +72,7 @@ export class ChessBoard {
 
   static Piece: typeof Piece = Piece
   static Color: typeof Color = Color
+  static Castle: typeof Castle = Castle
 
   static flip (board: bigint): bigint {
     const v1 = 71777214294589695n
