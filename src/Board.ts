@@ -9,32 +9,32 @@ const Squares = new BigUint64Array(64).fill(0n).reduce<Object>((acc, _, cur) => 
 }, {})
 
 const Files = BigUint64Array.from([
-  72340172838076673n,
-  144680345676153346n,
-  289360691352306692n,
-  578721382704613384n,
-  1157442765409226768n,
-  2314885530818453536n,
-  4629771061636907072n,
-  9259542123273814144n
+  0x0101010101010101n,
+  0x0202020202020202n,
+  0x0404040404040404n,
+  0x0808080808080808n,
+  0x1010101010101010n,
+  0x2020202020202020n,
+  0x4040404040404040n,
+  0x8080808080808080n
 ])
 
 const Ranks = BigUint64Array.from([
-  255n,
-  65280n,
-  16711680n,
-  4278190080n,
-  1095216660480n,
-  280375465082880n,
-  71776119061217280n,
-  18374686479671623680n
+  0x00000000000000ffn,
+  0x000000000000ff00n,
+  0x0000000000ff0000n,
+  0x00000000ff000000n,
+  0x000000ff00000000n,
+  0x0000ff0000000000n,
+  0x00ff000000000000n,
+  0xff00000000000000n
 ])
 
 const Misc = {
-  diagonal: 9241421688590303745n,
-  antidiagonal: 72624976668147840n,
-  lightSquares: 6172840429334713770n,
-  darkSquares: 12273903644374837845n
+  diagonal: 0x8040201008040201n,
+  antidiag: 0x0102040810204080n,
+  lSquares: 0x55aa55aa55aa55aan,
+  dSquares: 0xaa55aa55aa55aa55n
 }
 
 /**
@@ -57,11 +57,17 @@ enum Color { White, Black }
 enum Piece { Rook, Knight, Bishop, Queen, King, Pawn }
 enum Castle { KQkq, KQk, KQq, KQ, Kkq, Kk, Kq, K, Qkq, Qk, Qq, Q, kq, k, q, ''}
 
+/**
+ * Chess board representation.
+ */
 export class ChessBoard {
   public move: number = 1
   public halfMoveClock: number = 0
   public enPassant: number = NaN
   public canCastle: Castle = Castle.KQkq
+  static Piece: typeof Piece = Piece
+  static Color: typeof Color = Color
+  static Castle: typeof Castle = Castle
 
   /**
    * One bitboard per colour, and one bitboard per piece.
@@ -70,29 +76,46 @@ export class ChessBoard {
    */
   public pieces: BigUint64Array = new BigUint64Array(8)
 
-  static Piece: typeof Piece = Piece
-  static Color: typeof Color = Color
-  static Castle: typeof Castle = Castle
+  /**
+   * Union of all piece bitboards, updated incrementally in tandem with the
+   *  piece bitboards.
+   */
+  public occupancy: bigint = 0n
 
+  /**
+   * Flips the bitboard vertically.
+   * @param board - the bitboard to flip
+   * @returns the new bitboard
+   */
   static flip (board: bigint): bigint {
-    const v1 = 71777214294589695n
-    const v2 = 281470681808895n
+    const v1 = 0x00ff00ff00ff00ffn
+    const v2 = 0x0000ffff0000ffffn
     board = ((board >> 8n) & v1) | ((board & v1) << 8n)
     board = ((board >> 16n) & v2) | ((board & v2) << 16n)
     board = (board >> 32n) | (board << 32n)
     return board
   }
 
+  /**
+   * Mirrors the bitboard horizontally.
+   * @param board - the bitboard to mirror
+   * @returns the new bitboard
+   */
   static mirror (board: bigint): bigint {
-    const h1 = 6148914691236517205n
-    const h2 = 3689348814741910323n
-    const h4 = 1085102592571150095n
+    const h1 = 0x5555555555555555n
+    const h2 = 0x3333333333333333n
+    const h4 = 0x0f0f0f0f0f0f0f0fn
     board = ((board >> 1n) & h1) + 2n * (board & h1)
     board = ((board >> 2n) & h2) + 4n * (board & h2)
     board = ((board >> 4n) & h4) + 16n * (board & h4)
     return board
   }
 
+  /**
+   * Rotates the bitboard by 180 degrees.
+   * @param board - the bitboard to rotate
+   * @returns the new bitboard
+   */
   static rotate180 (board: bigint): bigint {
     return this.mirror(this.flip(board))
   }
@@ -175,19 +198,19 @@ const pawnMoves = new BigUint64Array(64)
     (Math.floor(origin / 8) === 1 ? 2n ** (BigInt(origin) + Directions.N * 2n) : 0n) |
     init(Ranks[Math.floor(origin / 8) + 1], 0n) & kingMoves[origin])
 
-export const pseudoLegalMoves: BigUint64Array[] = []
-pseudoLegalMoves[Color.White | Piece.King * 2] = kingMoves
+export const potentialMoves: BigUint64Array[] = []
+potentialMoves[Color.White | Piece.King * 2] = kingMoves
   .map((board, origin) => board | (origin === 60 ? 2n ** 58n | 2n ** 62n : 0n))
-pseudoLegalMoves[Color.Black | Piece.King * 2] = kingMoves
+potentialMoves[Color.Black | Piece.King * 2] = kingMoves
   .map((board, origin) => board | (origin === 4 ? 2n ** 2n | 2n ** 6n : 0n))
-pseudoLegalMoves[Color.White | Piece.Queen * 2] = queenMoves
-pseudoLegalMoves[Color.Black | Piece.Queen * 2] = queenMoves
-pseudoLegalMoves[Color.White | Piece.Bishop * 2] = bishopMoves
-pseudoLegalMoves[Color.Black | Piece.Bishop * 2] = bishopMoves
-pseudoLegalMoves[Color.White | Piece.Knight * 2] = knightMoves
-pseudoLegalMoves[Color.Black | Piece.Knight * 2] = knightMoves
-pseudoLegalMoves[Color.White | Piece.Rook * 2] = rookMoves
-pseudoLegalMoves[Color.Black | Piece.Rook * 2] = rookMoves
-pseudoLegalMoves[Color.White | Piece.Pawn * 2] = pawnMoves
-pseudoLegalMoves[Color.Black | Piece.Pawn * 2] = pawnMoves
+potentialMoves[Color.White | Piece.Queen * 2] = queenMoves
+potentialMoves[Color.Black | Piece.Queen * 2] = queenMoves
+potentialMoves[Color.White | Piece.Bishop * 2] = bishopMoves
+potentialMoves[Color.Black | Piece.Bishop * 2] = bishopMoves
+potentialMoves[Color.White | Piece.Knight * 2] = knightMoves
+potentialMoves[Color.Black | Piece.Knight * 2] = knightMoves
+potentialMoves[Color.White | Piece.Rook * 2] = rookMoves
+potentialMoves[Color.Black | Piece.Rook * 2] = rookMoves
+potentialMoves[Color.White | Piece.Pawn * 2] = pawnMoves
+potentialMoves[Color.Black | Piece.Pawn * 2] = pawnMoves
   .map(ChessBoard.rotate180).reverse()
