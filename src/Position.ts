@@ -1,3 +1,13 @@
+/**
+ * This code is going to look like Sunfish for a little bit until I've got
+ *  something that at least functions, after which I'll be able to revisit
+ *  some of the stuff here.
+ * The evaluation function is going to be original anyhow, but none of this is
+ *  final as it is either.
+ * @see https://github.com/thomasahle/sunfish/blob/master/sunfish.py
+ * @see https://www.naftaliharris.com/blog/chess/
+ */
+
 export enum CastlingRights {
   K = 1, Q = 2,
   k = 4, q = 8,
