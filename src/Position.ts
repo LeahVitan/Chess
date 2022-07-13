@@ -4,7 +4,7 @@
  *  some of the stuff here.
  * The evaluation function is going to be original anyhow, but none of this is
  *  final as it is either.
- * 
+ *
  * Sunfish: @see https://github.com/thomasahle/sunfish/blob/master/sunfish.py
  * Custom engine breakdown: @see https://www.naftaliharris.com/blog/chess/
  * Evaluating moves: @see https://www.chessprogramming.org/Evaluation
@@ -47,33 +47,32 @@ export class Position {
   public evaluation: number
   public castlingRights: number
 
-  public constructor(board: string, evaluation: number, cr: number) {
+  public constructor (board: string, evaluation: number, cr: number) {
     this.board = board
     this.evaluation = evaluation
     this.castlingRights = cr
   }
 
-  public generateMoves() { }
-  public rotate() { }
+  public generateMoves () { }
+  public rotate () { }
   /// TODO: allow passing null for a null-move, which rotates the board and clears the en passant square
-  public move() { }
-  public evaluate() { }
+  public move () { }
+  public evaluate () { }
 }
-
 
 /**
  * Evaluating and deciding on moves will take several ideas into account.
- * 
+ *
  *                   =========== Risk Assessment ==========
- * 
+ *
  * Firstly, there is the idea of going into sharp lines hoping the opponent
  *  makes a mistake. If a refutation is found, it doesn't cause an automatic
  *  cutoff like in alpha-beta pruning. Instead, the engine does a risk
  *  calculation, which may mean keeping "bad" moves in the search tree a little
  *  longer than other engines would.
- * 
+ *
  *                       --------- Naturality --------
- * 
+ *
  * When looking for a refutation, unnatural moves are regarded as worse simply
  *  by virtue of being unnatural. That is, if all the refutations the opponent
  *  has available are counterintuitive, the engine may decide that the move is
@@ -103,14 +102,14 @@ export class Position {
  *  search tree, just as usual.
  * After completing this analysis, the engine stores the objective evaluation,
  *  the naturality-adjusted evaluation, and the naturality of the move.
- * 
+ *
  *                       ---------- Respect ----------
- * 
+ *
  * A refutation may not lead to a direct advantage, requiring the player to
  *  play many correct moves in a row. Unless the player knows the line they're
  *  going into, it's likely they'll make a mistake. But if they do know the
- *  line, you better make sure you want to see it through! 
- * In other words, in tricky positions, it's very important to know your'
+ *  line, you better make sure you want to see it through!
+ * In other words, in tricky positions, it's very important to know your
  *  opponent. This engine does of course not know its opponent, but it can make
  *  some guesses. These guesses basically boil down to a "contempt factor" but
  *  for taking risks; The more the engine respects the opponent is, the less it
@@ -121,7 +120,7 @@ export class Position {
  *  to infer its opponent's strength: the move they played (P), the next best
  *  move that is less natural (-N), and the best move that is more natural
  *  (+N).
- * Of course, if P is the best move, the conclusion is simple: the opponent 
+ * Of course, if P is the best move, the conclusion is simple: the opponent
  *  will see moves that are of naturality P at least some of the time. This
  *  raises the engine's respect level, but only up to a point. The engine will
  *  still take risks that rely on the opponent missing moves of lower
@@ -146,9 +145,9 @@ export class Position {
  *  is lowered when the engine expected the opponent to miss it. The thresholds
  *  by which the engine derives this expectation can be changed to adjust the
  *  engine's behaviour.
- * 
- *                   ============== Material =============
- * 
+ *
+ *                   ========== Positional Play ==========
+ *
  * The evaluation of a position based on material on the board is relatively
  *  straight-forward. Each piece has a base value which is modified by things
  *  such as piece-square tables, mobility, pair bonus / penalty, material
@@ -156,10 +155,9 @@ export class Position {
  * That might seem like a lot of things that can all affect the value of a
  *  piece, but they only require looking at the current position and can be
  *  very quickly added or multiplied together.
- * 
- *                   ========== Positional Play ==========
+ *
  *                       ---------- Outposts ---------
- * 
+ *
  * Control of squares on the opponent's side of the board increases the
  *  evaluation of a position. Whether those squares are only under attack or
  *  actually have a piece on them doesn't matter, though of course placing a
@@ -172,7 +170,7 @@ export class Position {
  *  severely it reduces the bonus. For example, an outposted queen that can be
  *  attacked by a pawn is pretty pointless, and the evaluation will reflect
  *  that.
- * 
+ *
  * Aside from simply rewarding play that controls the other side of the board,
  *  special attention is also given to the location of the king. The file, rank
  *  and diagonal on which the enemy king is located get a bonus for being
@@ -198,13 +196,99 @@ export class Position {
  *  the enemy position. This bonus may also take into account piece position
  *  and density so that it recognises that what can be considered the "enemy
  *  position" can change, and awards the appropriate bonus when this occurs.
- * 
+ *
  * All of this is to say that creating safe squares for your pieces where they
  *  can attack the enemy position or the enemy king is very much encouraged by
  *  the evaluation function.
- * 
- * 
+ *
+ *                       ----------- Files -----------
+ *
+ * A rook is valued slightly higher if it's sitting on an open or half-open
+ *  file.
+ *
+ * A half-open or open file itself is not encouraged, however, and comes with a
+ *  slight penalty.
+ *
+ *                       ------ Pawn Structure -------
+ *
+ * A pawn is valued slightly higher if there are no enemy pawns on adjacent
+ *  files, and a decent amount higher if no other pawns directly ahead. This is
+ *  done in order to reward making a passed pawn.
+ *
+ * Pawns are worth more if they're defending another pawn. If there are no
+ *  same-coloured pawns on adjacent files whatsoever, they get a penalty. If
+ *  they are undefended, they're also worth a little less. The goal is to
+ *  reward creating a pawn structure and to punish overextending and creating
+ *  isolated pawns.
+ *
+ *                       -------- King Safety --------
+ *
+ * A position is valued higher if there are same-coloured pawns above the king.
+ *  This bonus fades very quickly as pawns move too far ahead.
+ * On the other hand, a position is valued lower is there are opposite-coloured
+ *  pawns above the king, since that means the opponent is using those pawns to
+ *  try to dismantle the pawn shield.
+ *
+ * When looking at all the squares a king could reach if he were replaced with
+ *  another piece, any undefended squares give a penalty. This penalty is
+ *  applied for each piece that can make such a move (except bishops, of which
+ *  only the ones moving on the king's current square colour are counted).
+ * For example, the penalty for the king sitting on an open file that enemy
+ *  pieces can easily more to, may be applied once for the queen and twice for
+ *  the rooks. If the opponent loses a rook, it's only applied once for the
+ *  rooks.
+ * An extra penalty is applied for each of those moves if they immediately
+ *  result in mate, since those weaknesses are the most urgent to cover.
+ *
+ * A position is also evaluated lower if any of the squares in a 3x3 area
+ *  around the king are under attack. This is due to the value boost enemy
+ *  pieces receive for attacking those squares.
+ *
+ * A position with castling availability is usually evaluated a decent amount
+ *  higher. For each side that the engine can castle, a basic king safety
+ *  evaluation is run after castling. King safety is decreased slightly for
+ *  every enemy piece that is attacking the squares the king must move over or
+ *  onto, as well as every piece that is blocking those squares.
+ * The two highest king safety values (including of the current position) are
+ *  averaged, and a weighted average with the king safety of the current
+ *  position is taken.
+ * To prevent the engine from being averse to castling, the king is valued less
+ *  on its starting position during the opening and early middle-game, even
+ *  though it's on the back rank where the king likes to be.
+ *
+ *                       ----------- Tempo -----------
+ *
+ * A position is evaluated as slightly worse if the opponent is to move. Since
+ *  the engine flips the board these positions are a bit harder to read from
+ *  transposition tables, but they can be recognised by using null-moves.
+ * If a position is read from a transposition table but the side to play is the
+ *  opponent, a penalty is applied to the evaluation to help enforce this
+ *  principle without having to do any further computation.
+ * There are some cases where not having to move gives some sort of advantage,
+ *  but this is mostly limited to endgames, so the strength of this penalty is
+ *  correlated with the amount of pieces on the board.
+ *
+ *                   =========== Tactical Play ===========
+ *
+ * Some of the first moves the engine will be looking at during search and
+ *  evaluation will be tactical moves, due to their ability to change the
+ *  position a lot either for better or worse.
+ *
+ *                   =========== Transposition ===========
+ *
+ * The engine will use transposition tables. All that's stored in them are the
+ *  pieces, EP square, and castling rights. Things like respect / contempt
+ *  factor are not included, with the rationale that if two different sequences
+ *  of moves led to the exact same position, the difference in playing strength
+ *  can't have been especially large.
+ *
+ * Since the engine flips the board rather than having an internal concept of
+ *  making moves for the opponent, the transposition table is slightly more
+ *  efficient. For example, after storing the position of 1. e4 c5 in the
+ *  transposition table, it will also recognise that position if reached via
+ *  1. c3 e5 2. c4, even though the position is entirely reversed.
  */
+
 class Search {
 
 }
