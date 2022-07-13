@@ -64,13 +64,15 @@ export class Position {
 /**
  * Evaluating and deciding on moves will take several ideas into account.
  * 
- *                  =========== Taking Risks ===========
+ *                   =========== Risk Assessment ==========
  * 
  * Firstly, there is the idea of going into sharp lines hoping the opponent
  *  makes a mistake. If a refutation is found, it doesn't cause an automatic
  *  cutoff like in alpha-beta pruning. Instead, the engine does a risk
  *  calculation, which may mean keeping "bad" moves in the search tree a little
  *  longer than other engines would.
+ * 
+ *                       --------- Naturality --------
  * 
  * When looking for a refutation, unnatural moves are regarded as worse simply
  *  by virtue of being unnatural. That is, if all the refutations the opponent
@@ -101,6 +103,8 @@ export class Position {
  *  search tree, just as usual.
  * After completing this analysis, the engine stores the objective evaluation,
  *  the naturality-adjusted evaluation, and the naturality of the move.
+ * 
+ *                       ---------- Respect ----------
  * 
  * A refutation may not lead to a direct advantage, requiring the player to
  *  play many correct moves in a row. Unless the player knows the line they're
@@ -142,6 +146,64 @@ export class Position {
  *  is lowered when the engine expected the opponent to miss it. The thresholds
  *  by which the engine derives this expectation can be changed to adjust the
  *  engine's behaviour.
+ * 
+ *                   ============== Material =============
+ * 
+ * The evaluation of a position based on material on the board is relatively
+ *  straight-forward. Each piece has a base value which is modified by things
+ *  such as piece-square tables, mobility, pair bonus / penalty, material
+ *  imbalance bonus / penalty, insufficient material penalty, etc.
+ * That might seem like a lot of things that can all affect the value of a
+ *  piece, but they only require looking at the current position and can be
+ *  very quickly added or multiplied together.
+ * 
+ *                   ========== Positional Play ==========
+ *                       ---------- Outposts ---------
+ * 
+ * Control of squares on the opponent's side of the board increases the
+ *  evaluation of a position. Whether those squares are only under attack or
+ *  actually have a piece on them doesn't matter, though of course placing a
+ *  piece there would mean even more control of enemy territory.
+ * When actually placing a piece in an outpost, the security of that piece is
+ *  also important. Safe pieces in enemy territory therefore get a bonus. The
+ *  fewer enemy pieces that can create an attack on an outposted piece, the
+ *  bigger the bonus gets. The lower the value of the piece that can
+ *  potentially create an attack when compared to the outposted piece, the more
+ *  severely it reduces the bonus. For example, an outposted queen that can be
+ *  attacked by a pawn is pretty pointless, and the evaluation will reflect
+ *  that.
+ * 
+ * Aside from simply rewarding play that controls the other side of the board,
+ *  special attention is also given to the location of the king. The file, rank
+ *  and diagonal on which the enemy king is located get a bonus for being
+ *  controlled. The other files, ranks and diagonals get a bonus that gets
+ *  exponentially smaller as they get further away from the king. This is meant
+ *  to encourage attacks aimed in the general direction of the enemy king
+ *  without necessarily striking at the king directly.
+ * (As an aside, there is also an extra bonus for controlling squares in a 3x3
+ *  area centred on the enemy king, since reducing the mobility of the king
+ *  makes it easier to create a mating attack. That has little to do with
+ *  outposts though, so let's move on.)
+ * The bonus for a diagonal decreases the more opportunities there are for
+ *  pawns to block it. Similarly, the bonus for a file decreases if it contains
+ *  a pawn (especially a same-coloured pawn). This has to do with mobility
+ *  issues faced by rooks and bishops: bishops are each restricted to one
+ *  square color and can't easily maneuver or get around a blocking piece,
+ *  while pawns can't move sideways to get out of a rook's way. This means that
+ *  it's easy for rooks and bishops to be useless even if they're pointing
+ *  right at the enemy king.
+ * Since this concerns the ability to easily create an attack from an outpost,
+ *  this bonus doesn't apply to controlling squares in the engine's own
+ *  territory. Instead, it gradually ramps up as those squares get closer to
+ *  the enemy position. This bonus may also take into account piece position
+ *  and density so that it recognises that what can be considered the "enemy
+ *  position" can change, and awards the appropriate bonus when this occurs.
+ * 
+ * All of this is to say that creating safe squares for your pieces where they
+ *  can attack the enemy position or the enemy king is very much encouraged by
+ *  the evaluation function.
+ * 
+ * 
  */
 class Search {
 
