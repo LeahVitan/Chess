@@ -47,17 +47,17 @@ export class Position {
   public evaluation: number
   public castlingRights: number
 
-  public constructor (board: string, evaluation: number, cr: number) {
+  public constructor(board: string, evaluation: number, cr: number) {
     this.board = board
     this.evaluation = evaluation
     this.castlingRights = cr
   }
 
-  public generateMoves () { }
-  public rotate () { }
+  public generateMoves() { }
+  public rotate() { }
   /// TODO: allow passing null for a null-move, which rotates the board and clears the en passant square
-  public move () { }
-  public evaluate () { }
+  public move() { }
+  public evaluate() { }
 }
 
 /**
@@ -287,6 +287,129 @@ export class Position {
  *  efficient. For example, after storing the position of 1. e4 c5 in the
  *  transposition table, it will also recognise that position if reached via
  *  1. c3 e5 2. c4, even though the position is entirely reversed.
+ * 
+ *                   ========== Search Algorithm =========
+ * 
+ * Because of the risk assessment feature, alpha-beta pruning can't be used
+ *  without modification, so this section is dedicated to exploring solutions
+ *  to this problem.
+ * 
+ * The main issue is that risking a bad position may be a worthwhile move if it
+ *  catches the opponent off guard by forcing them into a line they don't know
+ *  well.
+ * To evaluate whether this is worthwhile, the engine needs to know what the
+ *  eventual evaluation it's hoping for is, what the evaluation is if the
+ *  opponent spots a refutation, and the playing strength at which the engine
+ *  thinks the opponent will see that refutation.
+ * This works as follows: the engine assumes it will reach the position it's
+ *  hoping for, starting with that evaluation. It then uses an estimate of the
+ *  opponent's current playing strength (the "respect" metric above) divided by
+ *  the playing strength at which it's not worth it, as an interpolation weight
+ *  between the good and bad position to reach the evaluation on which to base
+ *  the cutoff.
+ * There is one further issue here, though: the engine can't calculate a good
+ *  "good", "bad", and "risk" evaluation without looking deeper. So the closer
+ *  the engine gets to its depth limit, the less meaningful those values will
+ *  be. The entire point here is to avoid early cutoffs for dubious but tricky
+ *  lines, so if it can't see the difference between taking a risk and making a
+ *  blunder, the whole process is useless.
+ * This means the engine needs to perform a deeper but more limited search,
+ *  similar to a quiescence search, to find the true evaluation of a position.
+ * 
+ *                       -------- Risk Search --------
+ * 
+ * Since we can make no quiescence assumptions when calculating risk, we can't
+ *  prune the risk tree in the same way, meaning that to be more effective, we
+ *  need to evaluate positions more quickly, and prune more aggressively.
+ * 
+ * One optimisation we can make in general is to assume that the opponent won't
+ *  take risks. Since the engine can calculate the line it needs to follow, we
+ *  can assume it follows the correct line and thus that we can always punish
+ *  the opponent if they take a risk, meaning it's not necessary to search a
+ *  "risky" move by the opponent any deeper than the first refutation we find.
+ * Similarly, we don't need to evaluate the opinion the opponent has of the
+ *  engine's playing strength, either. If taking risks doesn't matter, neither
+ *  does respect.
+ * We can additionally assume during this limited search that the engine will
+ *  take no further risks. This may not be accurate, and the engine may reach
+ *  a better evaluation if it does take another risk, but we don't really need
+ *  to know about that at this point. It could change the evaluation a little,
+ *  but going without further dubious moves is a good enough target to
+ *  calculate risk from.
+ * 
+ * Something else we can assume is that the opponent will always see refutation
+ *  moves that are more natural than any move that got them to this point. Even
+ *  if the move itself is weak, so long at it beats the evaluation of the
+ *  position we do our risk search from, we can establish a lower bound on
+ *  evaluation for this move and for risk on subsequent ones, i.e. the opponent
+ *  will not make weaker moves than this one, and their estimated strength will
+ *  not diminish.
+ * 
+ * Another assumption we can make is that if there were any better moves for
+ *  the opponent earlier on, the opponent will not make moves that are any less
+ *  natural than the most natural one in that set, even if they are better. 
+ *  This is a lower bound on the naturality of moves, which can limit the
+ *  amount we need to search greatly. For example, we can prune the entire
+ *  branch if all of the good moves available are less natural than a
+ *  previously missed move that was better.
+ * 
+ * All the extra work done in establishing risk isn't useless. Any encountered
+ *  positions can be stored in a transposition table and help with move
+ *  ordering and potentially with evaluation.
+ * 
+ *                       ---- Iterative Deepening ----
+ * 
+ * It's yet to be seen whether iterative deepening is worth it in a scenario
+ *  where the search tree can't be pruned as aggressively as with alpha-beta.
+ * It may be worth it only during risk searches or quiescence searches, but
+ *  perhaps not during a general search.
+ * 
+ * Another idea is to modify the iterative deepening algorithm. Rather than
+ *  start over every time, perhaps a node is only revisited if the best move
+ *  changes. This would work as follows:
+ * First, a temporary evaluation is given to a position in typical minimax
+ *  fashion, i.e. its best move is used. Then the preceding move gets that
+ *  evaluation. This value propagates up the search tree, and any time this
+ *  causes an upset, that position becomes "dirty".
+ * After the value has propagated back up, a new search starts at the highest
+ *  "dirty" node rather than going deeper. From there, all non-dirty nodes are
+ *  skipped, i.e. because the move didn't cause an upset there it's assumed
+ *  that the position was unaffected. After a dirty node is re-evaluated, it
+ *  ceases to be dirty. Any further upsets caused will once again trigger a new
+ *  search. This goes on until no more nodes are dirty.
+ * After this, the normal search resumes, but using the insights gained by the
+ *  above re-evaluation for move ordering.
+ * The advantage of this idea is that most nodes are usually skipped when a new
+ *  search happens, which offsets a lot of the problems an algorithm like
+ *  iterative deepening has when the search tree can't be pruned efficiently.
+ * 
+ * Another idea is to group all nodes of a certain depth together. Some of them
+ *  will have been pruned so they don't need to be included. These positions
+ *  are ordered from best to worst and searched in that order. This is more or
+ *  less just a breath-first search but with some depth-first characteristics
+ *  to eliminate the worst moves.
+ * Since this search is breadth-first, iterative deepening is a lot less
+ *  useful.
+ * 
+ * Lastly it may be possible to group all nodes to be searched regardless of
+ *  depth. This idea is similar to the above, but doesn't iterate on the search
+ *  tree at all. Instead it takes the best single node (or maybe a few?) from
+ *  a priority queue and evaluates it, adding most follow-up moves into a
+ *  second queue (one for each player). It goes back and forth between the two
+ *  queues.
+ * If a major upset is caused in evaluation due to a deep refutation, this
+ *  evaluation propagates upward through the search tree, which may prune or
+ *  un-prune certain moves from the priority queues.
+ * Pruning is less aggressive, but it should still prevent the engine from
+ *  pointlessly calculating good moves resulting from terrible lines. Taking a
+ *  few items from the queue at a time also means it will evaluate positions
+ *  that are not always ideal, but still worthwhile to look at using the risk
+ *  assessment algorithm.
+ * Because nodes can be easily pruned or un-pruned from the queue, causing the
+ *  algorithm to skip them, any big upsets will cause only a very minimal
+ *  impact to the way it runs and looks at positions.
+ * This approach is of course not very compatible with iterative deepening.
+ * 
  */
 
 class Search {
